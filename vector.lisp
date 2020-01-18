@@ -1,9 +1,9 @@
 (in-package :vector)
 
 (defclass vec ()
-  ((x :initarg :x :accessor x)
-   (y :initarg :y :accessor y)
-   (z :initarg :z :accessor z)))
+  ((x :initarg :x :accessor x :type float)
+   (y :initarg :y :accessor y :type float)
+   (z :initarg :z :accessor z :type float)))
 
 (defun make-vec (&key x y z)
   (declare (float x y z))
@@ -109,4 +109,7 @@ Assuming that v1 and v2 are in the XZ plane, then the direction of the cross pro
 (defun v-normalize (v)
   "Normalize a vector"
   (declare (vec v))
-  (v-div v (v-length v)))
+  (let ((l (v-length v)))
+    (if (zerop l)
+        v
+        (v-div v l))))
