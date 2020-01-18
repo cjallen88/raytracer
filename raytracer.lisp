@@ -92,10 +92,12 @@ https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rend
     coord))
 
 (defun print-colour (s vec)
+  "Calculate colour from given vector, clamps max values to 255
+to prevent issues when diffuse light intensity is too high"
   (format s "~a ~a ~a~&"
-          (floor (* (x vec) 255))
-          (floor (* (y vec) 255))
-          (floor (* (z vec) 255))))
+          (min 255 (floor (* (x vec) 255)))
+          (min 255 (floor (* (y vec) 255)))
+          (min 255 (floor (* (z vec) 255)))))
 
 (defun print-fb (filename w h fb)
   (with-open-file (s filename :direction :output
