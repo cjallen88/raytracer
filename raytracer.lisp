@@ -10,6 +10,8 @@
 
 (defparameter *background-colour* (getf *colours* :black))
 
+(defparameter *ambient-light-intensity* 0.2)
+
 (defclass sphere ()
   ((centre :initarg :centre :accessor centre)
    (radius :initarg :radius :accessor radius :type float)
@@ -74,36 +76,29 @@ https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rend
                   (when (> t0 0)
                     t0)))))))))
 
-(defun diffuse-intensity (ray hit-object hit-distance hit-point hit-normal lights)
-  "Returns the colour of the hitpoint modified by light intensity and surface normal
-https://github.com/ssloy/tinyraytracer/commit/9a728fff2bbebb1eedd86e1ac89f657d43191609
-https://www.youtube.com/watch?v=5apJJKd4z-s"
-  (flet ((light-intensity-reducer (acc l)
-           (let ((light-dir (v-normalize (v-sub (pos l) hit-point))))
-             (+ acc (* (intensity l)
-                       (max 0.0
-                            (min 1.0 (v-dot hit-normal light-dir))))))))
-    (reduce #'light-intensity-reducer
-            lights
-            :initial-value 0.0)))
-
 (defun reflect (light-dir hit-normal)
   (v-sub light-dir (v-mul (v-mul hit-normal (v-dot light-dir hit-normal))
                           2.0)))
 
-(defun specular-intensity (ray hit-obj hit-point hit-normal lights)
-  "http://learnwebgl.brown37.net/09_lights/lights_specular.html"
-  (flet ((light-intensity-reducer (acc l)
-           (let ((light-dir (v-normalize (v-sub (pos l) hit-point))))
-             (+ acc (* (expt (max 0.0 ;; sets the reflect on the back half to 0
-                                  (v-dot (reflect light-dir hit-normal)
-                                         (direction ray)))
-                             10)
-                       (intensity l))))))
-    (* (reduce #'light-intensity-reducer
-                lights
-                :initial-value 0.0)
-       (specular-exponent hit-obj))))
+(defun hit-colour (ray hit-obj hit-point hit-normal lights)
+  (flet (; https://github.com/ssloy/tinyraytracer/commit/9a728fff2bbebb1eedd86e1ac89f657d43191609
+         ; https://www.youtube.com/watch?v=5apJJKd4z-
+         (diffuse-intensity (light light-dir)
+           (* (intensity light)
+              (max 0.0 (min 1.0 (v-dot hit-normal light-dir)))))
+         ; http://learnwebgl.brown37.net/09_lights/lights_specular.htm
+         (specular-intensity (light-dir)
+          (* (expt (max 0.0 ;; sets the reflect on the back half to 0
+                (v-dot (reflect light-dir hit-normal)
+                       (direction ray)))
+           100))))
+    (iter (for l in lights)
+      (let ((light-dir (v-normalize (v-sub (pos l) hit-point))))
+        (sum (diffuse-intensity l light-dir) into diffuse-intensity)
+        (multiply (specular-intensity light-dir) into specular-intensity)
+        (finally (return (v-add (v-add (v-mul (colour hit-obj) diffuse-intensity)
+                                       (v-mul (colour hit-obj) *ambient-light-intensity*))
+                                (* specular-intensity (specular-exponent hit-obj)))))))))
 
 (defun cast-ray (ray scene lights)
   "Returns the colour of the ray depending on whether it hits anything"
@@ -118,12 +113,8 @@ https://www.youtube.com/watch?v=5apJJKd4z-s"
         (let* ((hit-point (v-add (origin ray)
                                  (v-mul (direction ray) (getf closest :hit-distance))))
                (hit-normal (v-normalize (v-sub hit-point
-                                               (centre (getf closest :hit-obj)))))
-               (diffuse-intensity (diffuse-intensity ray (getf closest :hit-obj) (getf closest :hit-distance) hit-point hit-normal lights))
-               (specular-intensity (specular-intensity ray (getf closest :hit-obj) hit-point hit-normal lights)))
-          (v-add (v-mul (colour (getf closest :hit-obj))
-                        diffuse-intensity)
-                 specular-intensity))
+                                               (centre (getf closest :hit-obj))))))
+          (hit-colour ray (getf closest :hit-obj) hit-point hit-normal lights))
         *background-colour*)))
 
 (defun raster-to-camera-coord (axis-pos axis-scale x-or-y)
