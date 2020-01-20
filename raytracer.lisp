@@ -12,16 +12,18 @@
 
 (defclass sphere ()
   ((centre :initarg :centre :accessor centre)
-   (radius :initarg :radius :accessor radius)
-   (colour :initarg :colour :accessor colour)))
+   (radius :initarg :radius :accessor radius :type float)
+   (colour :initarg :colour :accessor colour)
+   (specular-exponent :initarg :specular-exponent :accessor specular-exponent :type float)))
 
-(defun make-sphere (&key centre radius (colour (getf *colours* :yellow)))
-  (make-instance 'sphere :centre centre :radius radius :colour colour))
+(defun make-sphere (&key centre radius (colour (getf *colours* :yellow)) (specular-exp 0.4))
+  (make-instance 'sphere :centre centre :radius radius :colour colour :specular-exponent specular-exp))
 
 (defmethod print-object ((obj sphere) stream)
   (print-unreadable-object (obj stream :type t)
-    (with-slots (centre radius colour) obj
-      (format stream "centre: ~a, radius: ~a, colour: ~a" centre radius colour))))
+    (with-slots (centre radius colour specular-exponent) obj
+      (format stream "centre: ~a, radius: ~a, colour: ~a, specular-exp: ~a"
+              centre radius colour specular-exponent))))
 
 (defclass point-light ()
   ((pos :initarg :pos :accessor pos)
@@ -72,35 +74,56 @@ https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rend
                   (when (> t0 0)
                     t0)))))))))
 
-(defun diffuse-intensity (ray hit-object hit-distance lights)
+(defun diffuse-intensity (ray hit-object hit-distance hit-point hit-normal lights)
   "Returns the colour of the hitpoint modified by light intensity and surface normal
 https://github.com/ssloy/tinyraytracer/commit/9a728fff2bbebb1eedd86e1ac89f657d43191609
 https://www.youtube.com/watch?v=5apJJKd4z-s"
-  (let* ((hit-point (v-add (origin ray)
-                           (v-mul (direction ray) hit-distance)))
-         (hit-normal (v-normalize (v-sub hit-point
-                                         (centre hit-object)))))
-    (flet ((light-intensity-reducer (acc l)
-             (let ((light-dir (v-normalize (v-sub (pos l) hit-point))))
-               (+ acc (* (intensity l)
-                         (max 0.0
-                              (min 1.0 (v-dot hit-normal light-dir))))))))
-      (reduce #'light-intensity-reducer
-              lights
-              :initial-value 0.0))))
+  (flet ((light-intensity-reducer (acc l)
+           (let ((light-dir (v-normalize (v-sub (pos l) hit-point))))
+             (+ acc (* (intensity l)
+                       (max 0.0
+                            (min 1.0 (v-dot hit-normal light-dir))))))))
+    (reduce #'light-intensity-reducer
+            lights
+            :initial-value 0.0)))
+
+(defun reflect (light-dir hit-normal)
+  (v-sub light-dir (v-mul (v-mul hit-normal (v-dot light-dir hit-normal))
+                          2.0)))
+
+(defun specular-intensity (ray hit-obj hit-point hit-normal lights)
+  "http://learnwebgl.brown37.net/09_lights/lights_specular.html"
+  (flet ((light-intensity-reducer (acc l)
+           (let ((light-dir (v-normalize (v-sub (pos l) hit-point))))
+             (+ acc (* (expt (max 0.0 ;; sets the reflect on the back half to 0
+                                  (v-dot (reflect light-dir hit-normal)
+                                         (direction ray)))
+                             10)
+                       (intensity l))))))
+    (* (reduce #'light-intensity-reducer
+                lights
+                :initial-value 0.0)
+       (specular-exponent hit-obj))))
 
 (defun cast-ray (ray scene lights)
   "Returns the colour of the ray depending on whether it hits anything"
   (let* ((hits (mapcar (lambda (obj)
-                         (list obj (intersect ray obj)))
+                         (list :hit-obj obj :hit-distance (intersect ray obj)))
                        scene))
          (closest
            (iter (for h in hits)
-             (when (second h)
-               (finding h minimizing (second h))))))
+             (when (getf h :hit-distance)
+               (finding h minimizing (getf h :hit-distance))))))
     (if closest
-        (v-mul (colour (first closest))
-               (diffuse-intensity ray (first closest) (second closest) lights))
+        (let* ((hit-point (v-add (origin ray)
+                                 (v-mul (direction ray) (getf closest :hit-distance))))
+               (hit-normal (v-normalize (v-sub hit-point
+                                               (centre (getf closest :hit-obj)))))
+               (diffuse-intensity (diffuse-intensity ray (getf closest :hit-obj) (getf closest :hit-distance) hit-point hit-normal lights))
+               (specular-intensity (specular-intensity ray (getf closest :hit-obj) hit-point hit-normal lights)))
+          (v-add (v-mul (colour (getf closest :hit-obj))
+                        diffuse-intensity)
+                 specular-intensity))
         *background-colour*)))
 
 (defun raster-to-camera-coord (axis-pos axis-scale x-or-y)

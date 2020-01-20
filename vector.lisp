@@ -14,12 +14,18 @@
     (with-slots (x y z) obj
       (format stream "x: ~a, y: ~a, z: ~a" x y z))))
 
-(defun v-add (v1 v2)
+(defmethod v-add ((v1 vec) (v2 vec))
   "Compute addition of two vectors"
   (declare (vec v1 v2))
   (make-vec :x (+ (x v1) (x v2))
             :y (+ (y v1) (y v2))
             :z (+ (z v1) (z v2))))
+
+(defmethod v-add ((v1 vec) (f float))
+  "Compute addition of a float to a vector"
+  (make-vec :x (+ (x v1) f)
+            :y (+ (y v1) f)
+            :z (+ (z v1) f)))
 
 (defun v-neg (v)
   "Invert a vector"
