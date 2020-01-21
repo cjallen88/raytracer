@@ -17,4 +17,4 @@
 
 (defpackage #:raytracer
   (:use #:cl #:iterate #:vector)
-  (:export #:render #:make-sphere #:*colours*))
+  (:export #:render #:make-sphere #:make-point-light))

@@ -10,7 +10,9 @@
 
 (defparameter *background-colour* (getf *colours* :black))
 
-(defparameter *ambient-light-intensity* 0.2)
+(defparameter *ambient-light-intensity* 0.1)
+
+;;; SPHERE
 
 (defclass sphere ()
   ((centre :initarg :centre :accessor centre)
@@ -27,6 +29,8 @@
       (format stream "centre: ~a, radius: ~a, colour: ~a, specular-exp: ~a"
               centre radius colour specular-exponent))))
 
+;;; POINT LIGHT
+
 (defclass point-light ()
   ((pos :initarg :pos :accessor pos)
    (intensity :initarg :intensity :accessor intensity :type float)))
@@ -38,6 +42,8 @@
   (print-unreadable-object (obj stream :type t)
     (with-slots (pos intensity) obj
       (format stream "position: ~a, intensity: ~a" pos intensity))))
+
+;;; RAY
 
 (defclass ray ()
   ((origin :initarg :origin :accessor origin)
@@ -80,25 +86,38 @@ https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rend
   (v-sub light-dir (v-mul (v-mul hit-normal (v-dot light-dir hit-normal))
                           2.0)))
 
-(defun hit-colour (ray hit-obj hit-point hit-normal lights)
-  (flet (; https://github.com/ssloy/tinyraytracer/commit/9a728fff2bbebb1eedd86e1ac89f657d43191609
-         ; https://www.youtube.com/watch?v=5apJJKd4z-
+(defun hit-colour (ray hit-obj hit-point hit-normal scene lights)
+  (flet (;; https://github.com/ssloy/tinyraytracer/commit/9a728fff2bbebb1eedd86e1ac89f657d43191609
+         ;; https://www.youtube.com/watch?v=5apJJKd4z-
          (diffuse-intensity (light light-dir)
            (* (intensity light)
               (max 0.0 (min 1.0 (v-dot hit-normal light-dir)))))
-         ; http://learnwebgl.brown37.net/09_lights/lights_specular.htm
+         ;; http://learnwebgl.brown37.net/09_lights/lights_specular.htm
          (specular-intensity (light-dir)
-          (* (expt (max 0.0 ;; sets the reflect on the back half to 0
-                (v-dot (reflect light-dir hit-normal)
-                       (direction ray)))
-           100))))
+           (* (expt (max 0.0 ;; sets the reflect on the back half to 0
+                         (v-dot (reflect light-dir hit-normal)
+                                (direction ray)))
+                    50)))
+         (shadowed (light-dir light-distance)
+           (let* ((shadow-origin (if (< (v-length (v-mul light-dir hit-normal)) 0)
+                                     (v-sub hit-point (v-mul hit-normal 1e-3))
+                                     (v-add hit-point (v-mul hit-normal 1e-3))))
+                  (shadow-ray (make-ray :origin shadow-origin :direction light-dir)))
+             (iter (for obj in scene)
+               (let ((shadow-hit-dist (intersect shadow-ray obj)))
+                 (thereis (and shadow-hit-dist
+                               (let* ((shadow-hit-point (v-add shadow-origin (v-mul light-dir shadow-hit-dist)))
+                                      (shadow-distance (v-length (v-sub shadow-hit-point shadow-origin))))
+                                 (< shadow-distance light-distance)))))))))
     (iter (for l in lights)
-      (let ((light-dir (v-normalize (v-sub (pos l) hit-point))))
-        (sum (diffuse-intensity l light-dir) into diffuse-intensity)
-        (multiply (specular-intensity light-dir) into specular-intensity)
-        (finally (return (v-add (v-add (v-mul (colour hit-obj) diffuse-intensity)
+      (let ((light-dir (v-normalize (v-sub (pos l) hit-point)))
+            (light-distance (v-length (v-sub (pos l) hit-point))))
+        (unless (shadowed light-dir light-distance)
+          (sum (diffuse-intensity l light-dir) into di)
+          (sum (specular-intensity light-dir) into si))
+        (finally (return (v-add (v-add (v-mul (colour hit-obj) (float di))
                                        (v-mul (colour hit-obj) *ambient-light-intensity*))
-                                (* specular-intensity (specular-exponent hit-obj)))))))))
+                                (* (float si) (specular-exponent hit-obj)))))))))
 
 (defun cast-ray (ray scene lights)
   "Returns the colour of the ray depending on whether it hits anything"
@@ -114,7 +133,7 @@ https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rend
                                  (v-mul (direction ray) (getf closest :hit-distance))))
                (hit-normal (v-normalize (v-sub hit-point
                                                (centre (getf closest :hit-obj))))))
-          (hit-colour ray (getf closest :hit-obj) hit-point hit-normal lights))
+          (hit-colour ray (getf closest :hit-obj) hit-point hit-normal scene lights))
         *background-colour*)))
 
 (defun raster-to-camera-coord (axis-pos axis-scale x-or-y)

@@ -25,7 +25,13 @@
                                :colour (getf raytracer:*colours* :orange))))
 
 (defparameter *lights*
-  (list (raytracer::make-point-light :pos (vector:make-vec :x 3.0 :y -2.0 :z -1.0) :intensity 0.9)
-        (raytracer::make-point-light :pos (vector:make-vec :x -2.5 :y -2.0 :z -6.0) :intensity 0.7)))
+  (list (raytracer:make-point-light :pos (vector:make-vec :x -20.0 :y 20.0 :z 20.0)
+                                    :intensity 0.5)
+        
+        (raytracer:make-point-light :pos (vector:make-vec :x 30.0 :y 50.0 :z -25.0)
+                                    :intensity 0.5)
+
+        (raytracer:make-point-light :pos (vector:make-vec :x 30.0 :y 20.0 :z 30.0)
+                                    :intensity 0.5)))
 
 (raytracer:render "scene-test.ppm" 500 500 *scene* *lights*)
