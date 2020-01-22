@@ -34,4 +34,4 @@
         (raytracer:make-point-light :pos (vector:make-vec :x 30.0 :y 20.0 :z 30.0)
                                     :intensity 0.5)))
 
-(raytracer:render "scene-test.ppm" 500 500 *scene* *lights*)
+(raytracer:render "scene-test.ppm" 1000 1000 *scene* *lights*)
