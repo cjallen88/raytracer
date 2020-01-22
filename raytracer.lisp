@@ -61,26 +61,24 @@
 (defmethod intersect ((ray ray) (sphere sphere))
   "Returns the intersect entrance if RAY intersects with SPHERE, else NIL
 https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-sphere-intersection"
-  (with-slots (origin direction) ray
-    (with-slots (centre radius) sphere
-      (let* ((v-from-o-to-c (v-sub centre origin))
-             (tca (v-dot v-from-o-to-c direction)) ; distance to projection of centre on ray
-             (d-sqrd (- (v-dot v-from-o-to-c v-from-o-to-c)
-                        (* tca tca)))
-             (sphere-behind-ray (< tca 0)))
-        (if sphere-behind-ray
-            (let ((l (v-length v-from-o-to-c)))
-              (when (<= l radius)
-                l)) ; is origin inside sphere
-            ;; else centre of sphere projects on the array
-            (let ((radius-sqrd (expt radius 2)))
-              (unless (> d-sqrd radius-sqrd)
-                (let* ((thc (sqrt (- radius-sqrd d-sqrd)))
-                       (t0 (- tca thc))  ; intersect front
-                       (t1 (+ tca thc))) ; intersect back
-                  (when (> t0 t1) (rotatef t0 t1))
-                  (when (> t0 0)
-                    t0)))))))))
+  (let* ((v-from-o-to-c (v-sub (centre sphere) (origin ray)))
+         (tca (v-dot v-from-o-to-c (direction ray)))
+         (d-sqrd (- (v-dot v-from-o-to-c v-from-o-to-c)
+                    (* tca tca)))
+         (sphere-behind-ray (< tca 0)))
+    (if sphere-behind-ray
+        (let ((l (v-length v-from-o-to-c)))
+          (when (<= l (radius sphere))
+            l)) ; is origin inside sphere
+        ;; else centre of sphere projects on the array
+        (let ((radius-sqrd (expt (radius sphere) 2)))
+          (unless (> d-sqrd radius-sqrd)
+            (let* ((thc (sqrt (- radius-sqrd d-sqrd)))
+                   (t0 (- tca thc))  ; intersect front
+                   (t1 (+ tca thc))) ; intersect back
+              (when (> t0 t1) (rotatef t0 t1))
+              (when (> t0 0)
+                t0)))))))
 
 (defun reflect (light-dir hit-normal)
   (v-sub light-dir (v-mul (v-mul hit-normal (v-dot light-dir hit-normal))
