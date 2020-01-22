@@ -12,6 +12,8 @@
 
 (defparameter *ambient-light-intensity* 0.1)
 
+(defparameter *samples* 50)
+
 ;;; SPHERE
 
 (defclass sphere ()
@@ -135,11 +137,12 @@ https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rend
         *background-colour*)))
 
 (defun raster-to-camera-coord (axis-pos axis-scale x-or-y)
-  "https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-generating-camera-rays/generating-camera-rays"
+  "https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-generating-camera-rays/generating-camera-rays
+antialiasing: https://raytracing.github.io/books/RayTracingInOneWeekend.html#antialiasing"
   (flet ((deg-to-rad (degrees) (* pi (/ degrees 180.0)))
          (rad-to-deg (radians) (/ (* radians 180.0) pi)))
     (let* ((ndc ; Normalized Device Coordinates, mapping raster space to world space [0,1]
-             (/ (+ axis-pos 0.5) ; 0.5 to push position to centre of pixel
+             (/ (+ axis-pos (random 1.0)) ; random for supersampling
                 (float axis-scale)))
            (screenspace-coord ; convert x ndc to screenspace [-1,1]
              (ecase x-or-y
@@ -166,16 +169,20 @@ to prevent issues when diffuse light intensity is too high"
       (print-colour s (aref fb i)))))
 
 (defun render (filename width height scene lights)
-  (let ((fb (make-array (* width height))))
-    (iter (for j from 0 to (1- height))
-      (iter (for i from 0 to (1- width))
-        (let* ((camera (make-vec :x 0.0 :y 0.0 :z 0.0))
-               ;; map each x/y coord to ndc (map to real world) to calculate direction of ray
-               (x (* (raster-to-camera-coord i width :x)
-                     (/ width height))) ; correct for aspect ratio, assuming width > height
-               (y (raster-to-camera-coord j height :y))
-               (dir (v-normalize (make-vec :x x :y y :z -1.0)))
-               (ray (make-ray :origin camera :direction dir)))
-          (setf (aref fb (+ i (* j width)))
-                (cast-ray ray scene lights)))))
-    (print-fb filename width height fb)))
+  (let ((camera (make-vec :x 0.0 :y 0.0 :z 0.0)))
+    (let ((fb (make-array (* width height))))
+      (iter (for j from 0 to (1- height))
+        (iter (for i from 0 to (1- width))
+          (let ((total-colour (make-vec :x 0.0 :y 0.0 :z 0.0)))
+            (iter (for s from 0 to *samples*)
+              (let* (;; map each x/y coord to ndc (map to real world) to calculate direction of ray
+                     (x (* (raster-to-camera-coord i width :x)
+                           (/ width height))) ; correct for aspect ratio, assuming width > height
+                     (y (raster-to-camera-coord j height :y))
+                     (dir (v-normalize (make-vec :x x :y y :z -1.0)))
+                     (ray (make-ray :origin camera :direction dir)))
+                (setf total-colour
+                      (v-add total-colour (cast-ray ray scene lights)))
+                (setf (aref fb (+ i (* j width)))
+                      (v-div total-colour (float *samples*))))))))
+      (print-fb filename width height fb))))
